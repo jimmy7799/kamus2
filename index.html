@@ -3,184 +3,230 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kamus Mini</title>
+<title>Kamus Engine</title>
 
 <style>
-body {
+body{
     margin:0;
-    font-family: Arial, sans-serif;
-    background: #f2f5f9;
+    font-family:Arial, sans-serif;
+    background:#eef2f7;
     display:flex;
     justify-content:center;
-    align-items:flex-start;
 }
 
-.container {
+.wrapper{
     width:95%;
     max-width:420px;
-    margin-top:20px;
+    margin:15px 0;
     background:white;
     border-radius:16px;
     box-shadow:0 8px 20px rgba(0,0,0,0.08);
     padding:15px;
 }
 
-h2 {
-    margin:0 0 10px 0;
-    font-size:18px;
-    color:#2c3e50;
-}
-
-.input-group {
+.tabs{
     display:flex;
     gap:8px;
-    margin-bottom:12px;
+    margin-bottom:10px;
 }
 
-input {
+.tab{
     flex:1;
-    padding:10px;
+    padding:8px;
+    text-align:center;
+    border-radius:10px;
+    background:#f1f4f8;
+    cursor:pointer;
+    font-size:13px;
+}
+
+.tab.active{
+    background:#4a90e2;
+    color:white;
+}
+
+.section{
+    display:none;
+}
+
+.section.active{
+    display:block;
+}
+
+textarea{
+    width:100%;
+    height:100px;
     border-radius:10px;
     border:1px solid #dfe6ee;
-    font-size:14px;
-    outline:none;
-    transition:0.2s;
+    padding:8px;
+    font-size:13px;
+    resize:none;
 }
 
-input:focus {
-    border-color:#4a90e2;
+input{
+    flex:1;
+    padding:8px;
+    border-radius:10px;
+    border:1px solid #dfe6ee;
+    font-size:13px;
 }
 
-.results {
+.input-group{
+    display:flex;
+    gap:6px;
+    margin-bottom:10px;
+}
+
+.results{
     background:#f8fafc;
     border-radius:12px;
-    padding:10px;
-    min-height:90px;
+    padding:8px;
+    min-height:80px;
     max-height:120px;
     overflow-y:auto;
+    font-size:13px;
 }
 
-.word {
-    padding:4px 0;
-    font-size:14px;
-    color:#34495e;
+.word{
+    padding:3px 0;
     border-bottom:1px solid #ecf0f3;
 }
 
-.word:last-child {
+.word:last-child{
     border-bottom:none;
 }
 
-.loading {
-    text-align:center;
-    font-size:12px;
-    color:#999;
+.info{
+    font-size:11px;
+    color:#888;
+    margin-top:5px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-    <h2>Kamus Mini</h2>
+<div class="wrapper">
 
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('kamus')">Kamus</div>
+    <div class="tab" onclick="switchTab('input')">Input Massal</div>
+</div>
+
+<!-- ================= KAMUS ================= -->
+<div id="kamus" class="section active">
     <div class="input-group">
-        <input type="text" id="prefix" placeholder="Awalan (1-3 huruf)" maxlength="3">
-        <input type="text" id="suffix" placeholder="Akhiran (0-2)" maxlength="2">
+        <input type="text" id="prefix" maxlength="3" placeholder="Awalan 1-3 huruf">
+        <input type="text" id="suffix" maxlength="2" placeholder="Akhiran 0-2">
     </div>
-
     <div class="results" id="results">
-        <div class="loading">Ketik untuk mulai...</div>
+        <div class="info">Ketik awalan untuk mulai...</div>
     </div>
+</div>
+
+<!-- ================= INPUT MASSAL ================= -->
+<div id="input" class="section">
+    <textarea id="bulkText" placeholder="Tempel banyak kata di sini..."></textarea>
+    <div class="info">Otomatis dipilah ke A-Z</div>
+</div>
+
 </div>
 
 <script>
 
 const API_URL = "https://script.google.com/macros/s/AKfycbxZ5GkXfGJSSdB5AmhAmBVYx6kubkEnMQX4822JdxjlSCNZheI3TxbmPlwGTlgyNLxiAA/exec";
 
-let currentPool = [];
-let rotateInterval = null;
+let pool = [];
+let rotateTimer = null;
 
-const prefixInput = document.getElementById("prefix");
-const suffixInput = document.getElementById("suffix");
-const resultsBox = document.getElementById("results");
+/* ================= TAB SWITCH ================= */
 
-/* ===========================
-   FETCH SEARCH
-=========================== */
+function switchTab(id){
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+    event.target.classList.add("active");
+    document.getElementById(id).classList.add("active");
+}
 
-async function search() {
-    const prefix = prefixInput.value.toLowerCase().trim();
-    const suffix = suffixInput.value.toLowerCase().trim();
+/* ================= SEARCH ================= */
 
-    if(prefix.length < 1) {
-        resultsBox.innerHTML = "<div class='loading'>Minimal 1 huruf awalan</div>";
+async function search(){
+    const prefix = document.getElementById("prefix").value.trim().toLowerCase();
+    const suffix = document.getElementById("suffix").value.trim().toLowerCase();
+
+    if(prefix.length < 1){
+        document.getElementById("results").innerHTML =
+            "<div class='info'>Minimal 1 huruf</div>";
         return;
     }
 
-    resultsBox.innerHTML = "<div class='loading'>Loading...</div>";
+    const res = await fetch(
+        `${API_URL}?action=search&prefix=${prefix}&suffix=${suffix}`
+    );
+    const data = await res.json();
 
-    try {
-        const response = await fetch(
-            `${API_URL}?action=search&prefix=${prefix}&suffix=${suffix}`
-        );
-        const data = await response.json();
-
-        if(data.status) {
-            currentPool = data.words || [];
-            renderRandom();
-            startRotation();
-        } else {
-            resultsBox.innerHTML = "<div class='loading'>Tidak ditemukan</div>";
-        }
-
-    } catch(err) {
-        resultsBox.innerHTML = "<div class='loading'>Error koneksi</div>";
-    }
-}
-
-/* ===========================
-   RENDER 10 RANDOM
-=========================== */
-
-function renderRandom() {
-    if(currentPool.length === 0) {
-        resultsBox.innerHTML = "<div class='loading'>Tidak ada hasil</div>";
-        return;
-    }
-
-    let shuffled = [...currentPool].sort(() => 0.5 - Math.random());
-    let display = shuffled.slice(0,10);
-
-    resultsBox.innerHTML = display
-        .map(word => `<div class="word">${word}</div>`)
-        .join("");
-}
-
-/* ===========================
-   AUTO ROTATE 1 MENIT
-=========================== */
-
-function startRotation() {
-    if(rotateInterval) clearInterval(rotateInterval);
-
-    rotateInterval = setInterval(() => {
+    if(data.status){
+        pool = data.words || [];
         renderRandom();
-    }, 60000);
+        startRotate();
+    }
 }
 
-/* ===========================
-   EVENT LISTENER
-=========================== */
+/* ================= RENDER ================= */
 
-prefixInput.addEventListener("input", debounce(search, 400));
-suffixInput.addEventListener("input", debounce(search, 400));
+function renderRandom(){
+    if(pool.length === 0){
+        document.getElementById("results").innerHTML =
+            "<div class='info'>Tidak ada hasil</div>";
+        return;
+    }
 
-function debounce(func, delay) {
-    let timer;
-    return function() {
-        clearTimeout(timer);
-        timer = setTimeout(func, delay);
+    let shuffled = [...pool].sort(()=>0.5-Math.random());
+    let show = shuffled.slice(0,10);
+
+    document.getElementById("results").innerHTML =
+        show.map(w=>`<div class="word">${w}</div>`).join("");
+}
+
+/* ================= AUTO ROTATE ================= */
+
+function startRotate(){
+    if(rotateTimer) clearInterval(rotateTimer);
+    rotateTimer = setInterval(()=>{
+        renderRandom();
+    },60000);
+}
+
+/* ================= INPUT MASSAL ================= */
+
+document.getElementById("bulkText")
+.addEventListener("input", debounce(async function(){
+    const text = this.value;
+    if(text.length < 3) return;
+
+    await fetch(API_URL,{
+        method:"POST",
+        body: JSON.stringify({
+            action:"inputMassal",
+            text:text
+        })
+    });
+
+},1000));
+
+/* ================= EVENT ================= */
+
+document.getElementById("prefix")
+.addEventListener("input", debounce(search,400));
+
+document.getElementById("suffix")
+.addEventListener("input", debounce(search,400));
+
+function debounce(fn,delay){
+    let t;
+    return function(){
+        clearTimeout(t);
+        t=setTimeout(fn,delay);
     }
 }
 
