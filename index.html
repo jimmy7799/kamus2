@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kamus Mini</title>
+
+<style>
+body {
+    margin:0;
+    font-family: Arial, sans-serif;
+    background: #f2f5f9;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+}
+
+.container {
+    width:95%;
+    max-width:420px;
+    margin-top:20px;
+    background:white;
+    border-radius:16px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    padding:15px;
+}
+
+h2 {
+    margin:0 0 10px 0;
+    font-size:18px;
+    color:#2c3e50;
+}
+
+.input-group {
+    display:flex;
+    gap:8px;
+    margin-bottom:12px;
+}
+
+input {
+    flex:1;
+    padding:10px;
+    border-radius:10px;
+    border:1px solid #dfe6ee;
+    font-size:14px;
+    outline:none;
+    transition:0.2s;
+}
+
+input:focus {
+    border-color:#4a90e2;
+}
+
+.results {
+    background:#f8fafc;
+    border-radius:12px;
+    padding:10px;
+    min-height:90px;
+    max-height:120px;
+    overflow-y:auto;
+}
+
+.word {
+    padding:4px 0;
+    font-size:14px;
+    color:#34495e;
+    border-bottom:1px solid #ecf0f3;
+}
+
+.word:last-child {
+    border-bottom:none;
+}
+
+.loading {
+    text-align:center;
+    font-size:12px;
+    color:#999;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>Kamus Mini</h2>
+
+    <div class="input-group">
+        <input type="text" id="prefix" placeholder="Awalan (1-3 huruf)" maxlength="3">
+        <input type="text" id="suffix" placeholder="Akhiran (0-2)" maxlength="2">
+    </div>
+
+    <div class="results" id="results">
+        <div class="loading">Ketik untuk mulai...</div>
+    </div>
+</div>
+
+<script>
+
+const API_URL = "https://script.google.com/macros/s/AKfycbxZ5GkXfGJSSdB5AmhAmBVYx6kubkEnMQX4822JdxjlSCNZheI3TxbmPlwGTlgyNLxiAA/exec";
+
+let currentPool = [];
+let rotateInterval = null;
+
+const prefixInput = document.getElementById("prefix");
+const suffixInput = document.getElementById("suffix");
+const resultsBox = document.getElementById("results");
+
+/* ===========================
+   FETCH SEARCH
+=========================== */
+
+async function search() {
+    const prefix = prefixInput.value.toLowerCase().trim();
+    const suffix = suffixInput.value.toLowerCase().trim();
+
+    if(prefix.length < 1) {
+        resultsBox.innerHTML = "<div class='loading'>Minimal 1 huruf awalan</div>";
+        return;
+    }
+
+    resultsBox.innerHTML = "<div class='loading'>Loading...</div>";
+
+    try {
+        const response = await fetch(
+            `${API_URL}?action=search&prefix=${prefix}&suffix=${suffix}`
+        );
+        const data = await response.json();
+
+        if(data.status) {
+            currentPool = data.words || [];
+            renderRandom();
+            startRotation();
+        } else {
+            resultsBox.innerHTML = "<div class='loading'>Tidak ditemukan</div>";
+        }
+
+    } catch(err) {
+        resultsBox.innerHTML = "<div class='loading'>Error koneksi</div>";
+    }
+}
+
+/* ===========================
+   RENDER 10 RANDOM
+=========================== */
+
+function renderRandom() {
+    if(currentPool.length === 0) {
+        resultsBox.innerHTML = "<div class='loading'>Tidak ada hasil</div>";
+        return;
+    }
+
+    let shuffled = [...currentPool].sort(() => 0.5 - Math.random());
+    let display = shuffled.slice(0,10);
+
+    resultsBox.innerHTML = display
+        .map(word => `<div class="word">${word}</div>`)
+        .join("");
+}
+
+/* ===========================
+   AUTO ROTATE 1 MENIT
+=========================== */
+
+function startRotation() {
+    if(rotateInterval) clearInterval(rotateInterval);
+
+    rotateInterval = setInterval(() => {
+        renderRandom();
+    }, 60000);
+}
+
+/* ===========================
+   EVENT LISTENER
+=========================== */
+
+prefixInput.addEventListener("input", debounce(search, 400));
+suffixInput.addEventListener("input", debounce(search, 400));
+
+function debounce(func, delay) {
+    let timer;
+    return function() {
+        clearTimeout(timer);
+        timer = setTimeout(func, delay);
+    }
+}
+
+</script>
+
+</body>
+</html>
